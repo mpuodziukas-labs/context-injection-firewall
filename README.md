@@ -67,7 +67,7 @@ The canonical copy is built in this order:
 
 Tests: cases_v2.jsonl holds 26 synthetic attacks (invisible, homoglyph, spacing, encoded, role) and corpus_v2 holds 8 benign controls close to those rules. tests/test_v2.py has one mutant per step. RED-RUN-V2.txt is the run made before the code existed.
 
-Measured, not tuned. The command was `GUARD_ROOT=<folder with v1 or v2 firewall plus the other two guards> python3 evaluate.py` in guard-blind-evals. No case file, miss file or prediction file was read to design a rule.
+Measured, not tuned, with a harness outside this repo. The v1 and v2 rows below are not reproducible from a committed command yet: nothing in this repo prints them. The harness command was `GUARD_ROOT=<folder with v1 or v2 firewall plus the other two guards> python3 evaluate.py` in guard-blind-evals. No case file, miss file or prediction file was read to design a rule.
 
 | set | version | TP | FP | TN | FN | precision [95% CI] | recall [95% CI] |
 |---|---|---|---|---|---|---|---|
@@ -87,12 +87,12 @@ Limitations: semantic paraphrase is still out of reach for a pattern scanner. Th
 `python3 scanner.py --cascade FILE` adds stage 2 after the pattern scanner. A stage-1 BLOCK ends the run. Otherwise a small classifier reads the text and the stricter verdict wins. The default run is unchanged, and the JSON gains one field, `stage` (1 or 2), only under `--cascade`. A classifier hit is QUARANTINE, not BLOCK, because a classifier is a probability.
 
 - Model: protectai/deberta-v3-base-prompt-injection-v2, Apache-2.0, 184,423,682 parameters, ONNX on CPU (onnxruntime, at most 4 threads). It is not in this repo. Download the `onnx/` files into `models/protectai-deberta-v3-pi-v2/onnx/` and check them against `models.lock` (model.onnx sha256 f0ea7f23...228c, tokenizer.json sha256 752fe5f0...ff2f). Tests never download.
-- Fail closed: weights missing, sha256 mismatch, load or run error, or input needing more than 8 windows of 510 tokens is QUARANTINE, never PASS. Longer text is scanned in windows, and the highest score counts.
+- Fail closed: weights missing, sha256 mismatch, load or run error, or input needing more than 8 windows of 510 tokens is QUARANTINE, never PASS. Text is tokenized once without truncation and scored in overlapping windows of 508 tokens with a 128-token overlap; the last window must end at the last token, and the highest score counts. More than 8 windows (about 3,100 tokens) is `classifier-oversize`, QUARANTINE. A `models.lock` without a pin for both files is QUARANTINE, and the bytes that are hashed are the bytes that are loaded.
 - Threshold: the model card default, P(injection) > 0.5. Not tuned. My own 23-row synthetic dev set (`cascade_dev.jsonl`: 6 English paraphrases, 9 attacks in Spanish, German and French, 8 benign) was written before any measurement. It does not separate the classes at any threshold, so the default stays.
 - Training data, from the card: natolambert/xstest-v2-copy, VMware/open-instruct, alespalla/chatbot_instruction_prompts, HuggingFaceH4/grok-conversation-harmless, Harelix/Prompt-Injection-Mixed-Techniques-2024, OpenSafetyLab/Salad-Data, jackhhao/jailbreak-classification. deepset/prompt-injections is not listed, so the deepset number is not labelled contaminated. The card also says some injections were crafted from papers, competitions and community feedback, so overlap cannot be ruled out from the card. The card says the model is English only and gives no per-language numbers.
 - Considered and not used: Llama Prompt-Guard-2 22M and 86M (gated, Llama license).
 
-Measured once after the code was fixed, with `guard-blind-evals/evaluate.py` on temp copies of the three guards, the firewall run with `--cascade`. No tuning after.
+Measured once with `guard-blind-evals/evaluate.py` on temp copies of the three guards, the firewall run with `--cascade`. The harness has no `--cascade` flag, so every cascade number in this section (the table, the 17 of 52 false positives, and the p50 22.5 ms, p95 29.3 ms, max 33.1 ms latency) is not reproducible from a committed command yet. They were measured on the code before the 2026-10-04 window fix, so they describe the old truncating stage 2 and are historical. No tuning after.
 
 | set | TP | FP | TN | FN | precision [95% CI] | recall [95% CI] |
 |---|---|---|---|---|---|---|
@@ -101,11 +101,11 @@ Measured once after the code was fixed, with `guard-blind-evals/evaluate.py` on 
 | deepset sample (188 attacks, 312 benign), v2 alone | 10 | 2 | | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
 | deepset sample, v3 cascade | 86 | 5 | 307 | 102 | 0.95 [0.88, 0.98] | 0.46 [0.39, 0.53] |
 
-- Benign false positives on the in-house blind set: 17 of 52. On this repo's benign corpus, 6 of 24 files are flagged (documentation, JSON, CSV, a hex dump, identifiers). The goal was at most 1 of 24, so it is not met. Cascade precision 0.73 has a lower bound of 0.60, below the v2 lower bound of 0.72, so that goal is not met either.
+- Benign false positives on the in-house blind set: 17 of 52. On this repo's benign corpus, 6 of 24 files are flagged (command: `python3 scanner.py --cascade` on every file under corpus/benign and corpus_v2, 6 of 24 not PASS on 2026-10-04) (documentation, JSON, CSV, a hex dump, identifiers). The goal was at most 1 of 24, so it is not met. Cascade precision 0.73 has a lower bound of 0.60, below the v2 lower bound of 0.72, so that goal is not met either.
 - Stage-2 latency over 500 inputs (the 23 dev rows repeated, short texts, warm model, this Mac, CPU): p50 22.5 ms, p95 29.3 ms, max 33.1 ms. Goal of 50 ms met. Longer inputs cost more per window. Process start with hash check and model load is about 1.5 s per CLI call.
 - Recall 0.96 on the in-house set meets the 0.90 goal. Recall on the deepset sample is 0.46 and misses the goal: the sample is largely non-English and the model is English only. The in-house miss list is not published here because the blind-eval rules keep case and miss files unread.
 
-Limitations of v3: the benign false-positive rate is high for documentation, structured data and instruction-style text such as setup steps, so a reviewer will see many QUARANTINE verdicts. The classifier has no per-language numbers from its card, and my dev set is 15 attacks. Windows and the 8-window cap mean a very long file is quarantined, not judged. Only a stage-1 BLOCK is final. The in-house blind set was already used to evaluate v1 and v2, so it is not fresh. Stage 3 (taint flow at tool sinks) is not part of this change.
+Limitations of v3: the benign false-positive rate is high for documentation, structured data and instruction-style text such as setup steps, so a reviewer will see many QUARANTINE verdicts. The classifier has no per-language numbers from its card, and my dev set is 15 attacks. Windows and the 8-window cap mean a file over about 3,100 tokens (roughly 13,000 characters of prose) is quarantined, not judged. Turkish is a known miss: the English-only classifier scores a Turkish paraphrase of an override at 0.005 and the scanner passes it (planted as a strict xfail in tests/test_hostile.py). No keyword list for one language was added. Only a stage-1 BLOCK is final. The in-house blind set was already used to evaluate v1 and v2, so it is not fresh. Stage 3 (taint flow at tool sinks) is not part of this change.
 
 ## Honesty
 
@@ -122,11 +122,30 @@ The false positive count on the benign corpus is 0 of 16. That corpus is small a
 - The override and role lists are English and short. Other languages pass.
 - Homoglyph checks cover Cyrillic and Greek. Other look-alike scripts and mixed-script words shorter than three Latin letters pass, and inline code in prose is not treated as a shell command.
 - It scans one input at a time. An instruction split across two files or two tool calls is not joined.
+- Input containing a NUL byte is BLOCK (binary input is refused).
 - Input over 1 MiB is BLOCK, which is a size cap and not a judgment about the content.
 
 ## CI
 
-The workflow in .github/workflows/ci.yml runs `python evaluate.py` and `python -m pytest -q` on push and pull request, with each action pinned to a commit.
+The workflow in .github/workflows/ci.yml runs `python evaluate.py` and `python -m pytest -q` on push and pull request, with each action pinned to a commit. CI has no model weights, so the stage-2 tests that need the classifier skip there and only the fail-closed and window-arithmetic tests run; the model tests run locally.
+
+## Hostile review 2026-10-04
+
+An adversarial review (RED-RUN-REVIEW.txt) found 23 rows: kill 2, high 6, med 6, pass 9. Fixed 14 of 14 kill, high and med rows, or recorded them honestly; the 9 pass rows needed nothing.
+
+- K1, K1b: stage 2 judged only the first window; now tokenized once, overlapping windows, coverage asserted. Fixed.
+- K1c: the 8-window cap never fired; it now counts real windows and 1 MiB prose is `classifier-oversize`. Fixed.
+- H1: the long-input test was vacuous; its padding is now proven benign inside the test. Fixed.
+- H2: a split at a window edge; the overlap catches it, tested at 5 offsets. Fixed.
+- H3: Turkish miss. Recorded in Limitations and as a strict xfail, no principled fix.
+- H4, M2: the cascade numbers had no committed command. Labelled "not reproducible"; owner row to add a `--cascade` mode to the harness. M2 now names its command.
+- H5: an empty or partial `models.lock` skipped the check. Now QUARANTINE.
+- M1: the p95 test is skipped with a printed SKIP when load average exceeds cores and otherwise takes the best of 3 rounds; the 50 ms budget is unchanged. The p95 number is labelled not reproducible.
+- M3: CI skips the model tests; stated in the CI section.
+- M4: NUL input is BLOCK.
+- M5: the hashed bytes are now the loaded bytes (session and tokenizer built from memory).
+- M6: the README makes no claim of a third stage; a test pins that.
+- F8 (director): lock paths that do not name the pinned files, or a missing tokenizer, are QUARANTINE (tested).
 
 ## RED run
 

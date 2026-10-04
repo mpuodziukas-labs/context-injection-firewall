@@ -411,6 +411,8 @@ def _scan_stage1(data, name="<input>"):
             text = bytes(data).decode("utf-8")
         except UnicodeDecodeError as e:
             return _fail(name, "fail-closed-undecodable", "input is not valid UTF-8", e.start)
+        if "\x00" in text:
+            return _fail(name, "fail-closed-binary", "input contains NUL bytes; binary input is refused", text.index("\x00"))
         found = []
         for detector in (detect_unicode, detect_override, detect_exfil, detect_homoglyph, detect_encoded,
                          detect_canonical, detect_encoded_v2):
@@ -429,7 +431,11 @@ def _scan_stage1(data, name="<input>"):
 _RANK = {"PASS": 0, "QUARANTINE": 1, "BLOCK": 2}
 CASCADE_MODEL = "protectai-deberta-v3-pi-v2"
 CASCADE_THRESHOLD = 0.5   # model card default: argmax of two classes, i.e. P(injection) > 0.5
-CASCADE_WINDOWS = 8       # more 510-token windows than this is not scanned in full, so it is quarantined
+CASCADE_WINDOWS = 8       # more real windows than this is not scanned in full, so it is quarantined
+CASCADE_WINDOW_TOKENS = 508   # content tokens per window; [CLS] and [SEP] make 510
+CASCADE_OVERLAP = 128         # tokens shared by neighbouring windows, so a sentence cut at one edge is whole in the next
+LOCK_PATH = None   # default: models.lock next to this file
+REQUIRED_PINS = ("onnx/model.onnx", "onnx/tokenizer.json")
 _S2 = {}
 
 
@@ -441,6 +447,23 @@ def _stage2_fail(rule, detail):
     return {"verdict": "QUARANTINE", "reason": rule, "score": None, "detail": detail}
 
 
+def _windows(ids, size=None, overlap=None):
+    """(start, end) token spans that cover every token: each window starts `size - overlap` after the last, and the
+    last window ends at len(ids). The count is the real count, so the cap in stage2 cannot be undercounted."""
+    size = CASCADE_WINDOW_TOKENS if size is None else size
+    overlap = CASCADE_OVERLAP if overlap is None else overlap
+    n = len(ids)
+    out, start = [], 0
+    while True:
+        end = min(start + size, n)
+        out.append((start, end))
+        if end >= n:
+            break
+        start = end - overlap
+    assert out[-1][1] == n, "windows must cover every token"
+    return out
+
+
 def _s2_session(model_dir):
     """Load once per process: verify pinned sha256, then build the CPU session. Raises on any problem."""
     key = str(model_dir)
@@ -449,25 +472,26 @@ def _s2_session(model_dir):
     import hashlib
     import onnxruntime as ort
     from tokenizers import Tokenizer
-    root = os.path.dirname(os.path.abspath(__file__))
     pins = {}
-    for line in open(os.path.join(root, "models.lock"), encoding="utf-8"):
+    for line in open(LOCK_PATH or os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.lock"), encoding="utf-8"):
         if line.strip() and not line.startswith("#"):
             sha, _size, rel = line.split()
             pins[rel] = sha
-    for rel, sha in pins.items():
-        h = hashlib.sha256()
+    for rel in REQUIRED_PINS:   # a lock with a missing pin must fail closed, never skip the check
+        if len(pins.get(rel, "")) != 64:
+            raise ValueError("models.lock has no pin for " + rel)
+    blobs = {}
+    for rel, sha in pins.items():   # hash the bytes that are then loaded, so a swap after the check is not seen
         with open(os.path.join(model_dir, os.path.basename(rel)), "rb") as fh:
-            for blk in iter(lambda: fh.read(1 << 22), b""):
-                h.update(blk)
-        if h.hexdigest() != sha:
+            blobs[rel] = fh.read()
+        if hashlib.sha256(blobs[rel]).hexdigest() != sha:
             raise ValueError("sha256 mismatch")
     opts = ort.SessionOptions()
     opts.intra_op_num_threads = 4
     opts.inter_op_num_threads = 1
-    sess = ort.InferenceSession(os.path.join(model_dir, "model.onnx"), opts, providers=["CPUExecutionProvider"])
-    tok = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
-    tok.enable_truncation(max_length=510, stride=0)
+    sess = ort.InferenceSession(blobs["onnx/model.onnx"], opts, providers=["CPUExecutionProvider"])
+    tok = Tokenizer.from_str(blobs["onnx/tokenizer.json"].decode("utf-8"))
+    tok.no_truncation()
     _S2[key] = (sess, tok, {i.name for i in sess.get_inputs()})
     return _S2[key]
 
@@ -483,13 +507,15 @@ def stage2(text):
         except Exception as e:
             return _stage2_fail("classifier-unavailable", f"stage-2 model failed to load: {type(e).__name__}")
         import numpy as np
-        enc = tok.encode(text)
-        wins = [enc] + list(enc.overflowing)
+        ids = tok.encode(text, add_special_tokens=False).ids
+        wins = _windows(ids)
         if len(wins) > CASCADE_WINDOWS:
             return _stage2_fail("classifier-oversize", f"input needs more than {CASCADE_WINDOWS} windows")
+        cls, sep = tok.token_to_id("[CLS]"), tok.token_to_id("[SEP]")
         best = 0.0
-        for w in wins:
-            feed = {"input_ids": np.array([w.ids], dtype=np.int64), "attention_mask": np.array([w.attention_mask], dtype=np.int64)}
+        for a, b in wins:
+            w = [cls] + ids[a:b] + [sep]
+            feed = {"input_ids": np.array([w], dtype=np.int64), "attention_mask": np.array([[1] * len(w)], dtype=np.int64)}
             logits = sess.run(None, {k: v for k, v in feed.items() if k in names})[0][0]
             e = np.exp(logits - logits.max())
             best = max(best, float(e[1] / e.sum()))
