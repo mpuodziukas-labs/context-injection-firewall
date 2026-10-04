@@ -1,3 +1,20 @@
-# sha256  size  file   -- stage-2 weights, protectai/deberta-v3-base-prompt-injection-v2 (Apache-2.0), onnx/ folder, downloaded once
-f0ea7f239f765aedbde7c9e163a7cb38a79c5b8853d3f76db5152172047b228c 738563188 onnx/model.onnx
-752fe5f0d5678ad563e1bd2ecc1ddf7a3ba7e2024d0ac1dba1a72975e26dff2f 8648886 onnx/tokenizer.json
+{
+  "models": [
+    {
+      "path": "onnx/model.onnx",
+      "sha256": "f0ea7f239f765aedbde7c9e163a7cb38a79c5b8853d3f76db5152172047b228c",
+      "size": 738563188,
+      "license": "apache-2.0",
+      "source": "https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2",
+      "revision": "90c9989b1a342275dd0d1a95aad283c04e075671"
+    },
+    {
+      "path": "onnx/tokenizer.json",
+      "sha256": "752fe5f0d5678ad563e1bd2ecc1ddf7a3ba7e2024d0ac1dba1a72975e26dff2f",
+      "size": 8648886,
+      "license": "apache-2.0",
+      "source": "https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2",
+      "revision": "90c9989b1a342275dd0d1a95aad283c04e075671"
+    }
+  ]
+}

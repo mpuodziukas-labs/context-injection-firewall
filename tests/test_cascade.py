@@ -73,8 +73,16 @@ def test_hash_mismatch_is_quarantine(monkeypatch, tmp_path):
 
 
 def test_models_lock_pins_a_sha256():
-    lines = [l for l in (ROOT / "models.lock").read_text().splitlines() if l and not l.startswith("#")]
-    assert any(len(l.split()[0]) == 64 for l in lines)
+    import json
+    models = json.loads((ROOT / "models.lock").read_text())["models"]
+    assert any(len(e["sha256"]) == 64 and e["revision"] and e["license"] and e["source"] for e in models)
+
+
+def test_line_format_lock_does_not_parse_as_json_pins():
+    import json
+    old = "f" * 64 + " 1 onnx/model.onnx\n"
+    with pytest.raises(ValueError):
+        json.loads(old)
 
 
 # ---- ordering and stricter verdict (no model needed: stage 2 is stubbed) -------------------------

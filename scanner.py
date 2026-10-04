@@ -473,10 +473,9 @@ def _s2_session(model_dir):
     import onnxruntime as ort
     from tokenizers import Tokenizer
     pins = {}
-    for line in open(LOCK_PATH or os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.lock"), encoding="utf-8"):
-        if line.strip() and not line.startswith("#"):
-            sha, _size, rel = line.split()
-            pins[rel] = sha
+    with open(LOCK_PATH or os.path.join(os.path.dirname(os.path.abspath(__file__)), "models.lock"), encoding="utf-8") as fh:
+        for ent in json.load(fh)["models"]:   # F8 JSON pin format; anything else raises, caller QUARANTINEs
+            pins[ent["path"]] = ent["sha256"]
     for rel in REQUIRED_PINS:   # a lock with a missing pin must fail closed, never skip the check
         if len(pins.get(rel, "")) != 64:
             raise ValueError("models.lock has no pin for " + rel)

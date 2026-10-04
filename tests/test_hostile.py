@@ -18,6 +18,11 @@ MODEL = ROOT / "models" / "protectai-deberta-v3-pi-v2" / "onnx" / "model.onnx"
 needs_model = pytest.mark.skipif(not MODEL.exists(), reason="stage-2 weights not downloaded (see README)")
 
 
+def _lock(paths):
+    return json.dumps({"models": [{"path": p, "sha256": "f" * 64, "license": "apache-2.0",
+                                   "source": "https://example.invalid/m", "revision": "a" * 40} for p in paths]})
+
+
 def casc(text):
     return scanner.scan_input(text.encode("utf-8"), "x", cascade=True)
 
@@ -96,7 +101,7 @@ def test_h2_injection_split_at_window_boundary_is_caught(before):
 
 # ---- H5: lock with no pins ----------------------------------------------------------------------
 @needs_model
-@pytest.mark.parametrize("body", ["# no pins\n", "", "f" * 64 + " 1 onnx/model.onnx\n", "f" * 64 + " 1 onnx/tokenizer.json\n"])
+@pytest.mark.parametrize("body", ["# no pins\n", "", "f" * 64 + " 1 onnx/model.onnx\n", _lock(["onnx/model.onnx"]), _lock(["onnx/tokenizer.json"]), _lock([])])
 def test_h5_lock_missing_a_pin_is_quarantine(body, tmp_path, monkeypatch):
     lock = tmp_path / "models.lock"
     lock.write_text(body)
@@ -173,8 +178,7 @@ def test_readme_unreproducible_numbers_are_labelled():
 
 # ---- F8: lock path must resolve to the loaded files; a path miss is fail closed ----------------------
 @needs_model
-@pytest.mark.parametrize("body", ["f" * 64 + " 1 model.onnx\n" + "f" * 64 + " 1 tokenizer.json\n",
-                                  "f" * 64 + " 1 elsewhere/model.onnx\n" + "f" * 64 + " 1 elsewhere/tokenizer.json\n"])
+@pytest.mark.parametrize("body", [_lock(["model.onnx", "tokenizer.json"]), _lock(["elsewhere/model.onnx", "elsewhere/tokenizer.json"])])
 def test_f8_lock_paths_that_do_not_name_the_pinned_files_are_quarantine(body, tmp_path, monkeypatch):
     lock = tmp_path / "models.lock"
     lock.write_text(body)
