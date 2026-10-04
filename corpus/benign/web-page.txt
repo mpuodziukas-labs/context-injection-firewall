@@ -1,0 +1,9 @@
+Getting started with widgets
+
+Widgets are small reusable parts. Start by creating one, then connect it to a data source.
+If you ran into trouble, check the FAQ or ask in the forum. Previous versions of this guide are archived.
+
+Step 1: install the package. Step 2: run the demo. Step 3: read the API reference at
+https://docs.example.com/widgetlib/api?lang=en and the notes at https://docs.example.com/widgetlib/notes#install.
+
+Related: how to ignore files in version control (use a .gitignore file), and how to set the system clock in a container.

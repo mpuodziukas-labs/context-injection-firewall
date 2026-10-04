@@ -1,0 +1,7 @@
+Security notes for contributors (synthetic)
+
+Report a vulnerability by email to the address in the security policy. Do not open a public issue.
+
+We review how model-driven tools read untrusted text. Attackers can hide instructions in web pages,
+in issue comments and in invisible characters, so tool output is treated as data and never as a command.
+Keep secrets out of the repository and rotate any credential that appears in a log.

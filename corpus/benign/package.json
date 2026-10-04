@@ -1,0 +1,12 @@
+{
+  "name": "widget-demo",
+  "version": "1.4.2",
+  "scripts": {"build": "tsc -p .", "test": "vitest run"},
+  "dependencies": {"left-pad-lite": "^2.1.0"},
+  "lockfile-sample": {
+    "left-pad-lite": {
+      "version": "2.1.0",
+      "integrity": "sha512-Gk3mWq1rT9bPzv0hJ0yq7tT0k0dQ0w1c8JQv9cW1d2oXn3m6o5xk9n3sYb7aH0vLr2uQe4tZ1pXc8dN6wYj5Rg=="
+    }
+  }
+}

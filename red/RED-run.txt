@@ -1,0 +1,116 @@
+RED run: tests written first, scanner.py was a stub that passes every input.
+Command: python3 -m pytest -q --tb=line
+Result: every attack test fails because the stub lets the attack through; the benign tests pass.
+
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-tag-hidden-instruction]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-tag-short]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-tag-cancel]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-bidi-override]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-bidi-isolate]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-bidi-embedding]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-zero-width-space]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-zero-width-joiner-ascii]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-word-joiner]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[u-bom-midfile]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-ignore-previous]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-disregard]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-spaced-case]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-fullwidth]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-new-instructions]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-reveal-system-prompt]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-role-im-start]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-role-system-tag]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-role-bracket-inst]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-role-line-prefix]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-fake-tool-result]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-fake-function-results]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-zwsp-split]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[o-homoglyph-override]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-image-slot]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-image-dollar-slot]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-link-slot]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-html-img-slot]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-encoded-slot]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-image-base64-query]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-image-hex-query]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[x-link-base64-fragment]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-cyrillic-in-shell]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-greek-in-shell]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-prompt-line]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-cyrillic-host]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-greek-host-md-link]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[h-mixed-script-prose]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[e-base64-instruction]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[e-base64-curl]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[e-hex-instruction]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[e-double-base64]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[e-urlsafe-base64]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-undecodable-bytes]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-truncated-utf8]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-missing-file]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-directory-path]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-oversize]
+FAILED tests/test_proof.py::test_planted_attack_gets_its_verdict_and_rule[f-wrong-type]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-tag-hidden-instruction]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-tag-short]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-tag-cancel]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-bidi-override]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-bidi-isolate]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-bidi-embedding]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-zero-width-space]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-zero-width-joiner-ascii]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-word-joiner]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[u-bom-midfile]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-ignore-previous]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-disregard]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-spaced-case]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-fullwidth]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-new-instructions]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-reveal-system-prompt]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-role-im-start]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-role-system-tag]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-role-bracket-inst]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-role-line-prefix]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-fake-tool-result]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-fake-function-results]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-zwsp-split]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[o-homoglyph-override]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-image-slot]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-image-dollar-slot]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-link-slot]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-html-img-slot]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-encoded-slot]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-image-base64-query]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-image-hex-query]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[x-link-base64-fragment]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-cyrillic-in-shell]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-greek-in-shell]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-prompt-line]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-cyrillic-host]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-greek-host-md-link]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[h-mixed-script-prose]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[e-base64-instruction]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[e-base64-curl]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[e-hex-instruction]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[e-double-base64]
+FAILED tests/test_proof.py::test_reported_byte_offset_is_where_the_attack_starts[e-urlsafe-base64]
+FAILED tests/test_proof.py::test_verdict_json_shape_and_no_payload_echo - Ass...
+FAILED tests/test_proof.py::test_block_outranks_quarantine - AssertionError: ...
+FAILED tests/test_proof.py::test_scanner_exception_is_block - AttributeError:...
+FAILED tests/test_proof.py::test_empty_input_is_not_a_clean_bill - AssertionE...
+FAILED tests/test_proof.py::test_cli_exit_codes_and_json_lines - IndexError: ...
+FAILED tests/test_proof.py::test_readme_matches_output - AssertionError: READ...
+FAILED tests/test_proof.py::test_mutant_tag_characters_not_checked - Attribut...
+FAILED tests/test_proof.py::test_mutant_bidi_not_checked - AttributeError: <m...
+FAILED tests/test_proof.py::test_mutant_zero_width_not_checked - AttributeErr...
+FAILED tests/test_proof.py::test_mutant_override_patterns_removed - Attribute...
+FAILED tests/test_proof.py::test_mutant_role_patterns_removed - AttributeErro...
+FAILED tests/test_proof.py::test_mutant_template_slot_not_checked - Attribute...
+FAILED tests/test_proof.py::test_mutant_blob_not_judged_printable - Attribute...
+FAILED tests/test_proof.py::test_mutant_decoder_disabled - AttributeError: <m...
+FAILED tests/test_proof.py::test_mutant_confusable_scripts_empty - AttributeE...
+FAILED tests/test_proof.py::test_mutant_confusable_fold_removed - AttributeEr...
+FAILED tests/test_proof.py::test_mutant_normalization_removed - AttributeErro...
+FAILED tests/test_proof.py::test_mutant_fail_open - AttributeError: <module '...
+FAILED tests/test_proof.py::test_mutant_size_cap_removed - AttributeError: <m...
+111 failed, 19 passed in 0.18s

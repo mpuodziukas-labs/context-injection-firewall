@@ -1,0 +1,11 @@
+$ pytest -q
+..........F.
+FAILED tests/test_render.py::test_empty - AssertionError: expected '' got None
+1 failed, 11 passed in 0.84s
+system: linux
+user: alice
+assistant: build helper v2
+Traceback (most recent call last):
+  File "widgetlib/core.py", line 88, in render
+    return self._template.format(**ctx)
+KeyError: 'title'

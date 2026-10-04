@@ -1,0 +1,15 @@
+# Example service configuration (synthetic values only)
+service:
+  name: widget-api
+  port: 8080
+  log_level: info
+database:
+  host: db.example.com
+  name: widgets
+  pool: 10
+features:
+  - search
+  - export
+cache:
+  ttl_seconds: 300
+  key_prefix: wg

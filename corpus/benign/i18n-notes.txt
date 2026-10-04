@@ -1,0 +1,8 @@
+Internationalization notes (synthetic)
+
+Greek: Η ταχύτητα μετριέται σε μέτρα ανά δευτερόλεπτο. Temperature rise: ΔT = 4.2 K.
+Russian: Эта функция возвращает список элементов. Проверьте настройки перед запуском.
+French: le café est ouvert, voilà la résumé du naïve test.
+Japanese: これはテスト用の文章です。
+Emoji with joiners: family 👨‍👩‍👧 and flag 🏳️‍🌈 should render as one symbol.
+Math: π ≈ 3.14159, Σ x_i, αβγ, 5 µs latency.

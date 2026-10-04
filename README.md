@@ -1,8 +1,10 @@
 # context-injection-firewall
 
-A coding agent reads repo files, web pages and tool output as context, and one planted line in any of them can take over the agent before anyone reads it.
+Proves: planted hidden instructions in text an agent loads are stopped before they reach the agent. Verify in 60s: python3 evaluate.py
 
-## Run it in 60 seconds
+A coding agent reads repo files, web pages and tool output as context. One planted line in any of them can take over the agent, and nobody sees it because the line is invisible, encoded or dressed up as data. The team that owns the repository and the credentials pays for it, through a leaked key, a poisoned commit or a command nobody typed.
+
+## Run it (60s)
 
 ```
 python3 -m pip install pytest
@@ -10,16 +12,71 @@ python3 evaluate.py
 python3 -m pytest -q
 ```
 
-## Results
+`python3 evaluate.py` printed:
 
-| bad caught | good passed |
+```
+| attack class | caught |
 |---|---|
-| 1/1 | 1/1 |
+| invisible-unicode | 10/10 |
+| instruction-override | 14/14 |
+| exfil-beacon | 8/8 |
+| homoglyph | 6/6 |
+| encoded-payload | 5/5 |
+| fail-closed | 6/6 |
 
-## Honesty Statement
+| benign corpus | passed |
+|---|---|
+| files with no attack | 16/16 |
 
-Synthetic data. Not production, not client data.
+attacks caught 49/49, benign passed 16/16
+```
+
+`python3 -m pytest -q` prints a passed count with no failures. To scan your own files: `python3 scanner.py FILE...` prints one JSON verdict per file and exits 0 for all PASS, 1 for QUARANTINE, 2 for BLOCK.
+
+## What the scanner returns
+
+The scanner reads text before it enters agent context and returns one JSON object per input: `input`, `verdict` (PASS, QUARANTINE or BLOCK), `reason` (the rule of the first finding), `offset` (a byte offset into the input) and `findings`. A finding holds `rule`, `severity`, `offset` and a short `detail`. The detail describes the finding and never repeats the matched text. BLOCK outranks QUARANTINE, and findings are listed in offset order within a severity.
+
+## What each planted RED case proves
+
+Every row of the table is one attack class. Each planted case in cases.jsonl must get the verdict and rule it is labeled with, and the tests check that the reported byte offset is where the attack starts. The cases use JSON escapes, so the invisible characters are visible in the file.
+
+- invisible-unicode: tag characters U+E0000 to U+E007F that hide a whole sentence (u-tag-hidden-instruction, u-tag-short, u-tag-cancel) are BLOCK, and the hidden sentence is decoded and checked too. Bidirectional overrides, embeddings and isolates, the Trojan Source class (u-bidi-override, u-bidi-isolate, u-bidi-embedding), are BLOCK. Zero-width characters, a word joiner and a byte order mark inside a file (u-zero-width-space, u-zero-width-joiner-ascii, u-word-joiner, u-bom-midfile) are QUARANTINE. A joiner between two emoji is allowed.
+- instruction-override: "ignore previous instructions" and its variants in data are BLOCK, including mixed case, extra whitespace, full-width letters, a zero-width character inside a word and a Cyrillic letter standing in for a Latin one (o-ignore-previous, o-disregard, o-spaced-case, o-fullwidth, o-zwsp-split, o-homoglyph-override, o-new-instructions, o-reveal-system-prompt). Spoofed role markers and fake tool-result blocks (o-role-im-start, o-role-system-tag, o-role-bracket-inst, o-role-line-prefix, o-fake-tool-result, o-fake-function-results) are BLOCK.
+- exfil-beacon: a markdown image, markdown link or HTML image whose URL carries a template slot such as double braces or a dollar-brace placeholder is BLOCK, in plain or percent-encoded form (x-image-slot, x-image-dollar-slot, x-link-slot, x-html-img-slot, x-encoded-slot). An image whose query holds base64 or hex that decodes to readable text is BLOCK (x-image-base64-query, x-image-hex-query). The same in a plain link is QUARANTINE (x-link-base64-fragment).
+- homoglyph: Cyrillic or Greek letters inside a command in a shell code block or a prompt line are BLOCK (h-cyrillic-in-shell, h-greek-in-shell, h-prompt-line). Non-ASCII letters in a URL host are BLOCK (h-cyrillic-host, h-greek-host-md-link). A word that mixes Latin letters with look-alike letters is QUARANTINE (h-mixed-script-prose).
+- encoded-payload: a long base64 or hex run that decodes to an instruction is BLOCK, including a run encoded twice and the URL-safe alphabet (e-base64-instruction, e-base64-curl, e-hex-instruction, e-double-base64, e-urlsafe-base64).
+- fail-closed: bytes that are not valid UTF-8, a truncated UTF-8 sequence, a missing file, a directory, input larger than 1 MiB and an input of the wrong type are all BLOCK, never PASS (f-undecodable-bytes, f-truncated-utf8, f-missing-file, f-directory-path, f-oversize, f-wrong-type). The tests also make a detector raise and require BLOCK.
+
+The benign corpus is 16 files in corpus/benign: a README with badges, pinned links and a bug-report block, a contributing guide, Python, JavaScript, shell, YAML and JSON files, a changelog, an HTML page, a CSV file, a Makefile, a tool log, scraped page text and a note with Greek, Russian, French, Japanese and emoji text. They are written to look like real project files and to sit close to the attack rules: an embedded PNG in base64, a package integrity hash, sha256 digests, a commit hash in a URL, a link template with braces in the path, "System: Linux" in a bug template and a Russian comment in a shell script. All 16 must PASS.
+
+The tests also break the scanner on purpose and require the table to change each time. Each mutant removes one defense: tag characters, bidi characters, zero-width characters, the override patterns, the role patterns, the template slot check, the readable-text check for blobs, the decoder, the confusable scripts, the confusable fold, the normalization step, the fail-closed verdict and the size cap.
+
+## Honesty
+
+This is a small deterministic scanner, not a product, and it is a pattern check, not a defense in depth: it reads text and returns a verdict, and it does not contain an agent that ignores the verdict. The cases in cases.jsonl and the files in corpus/benign are synthetic and written for this repo. I did not test it against a real agent, real web pages or a real repository.
+
+The false positive count on the benign corpus is 0 of 16. That corpus is small and I wrote it, so 0 is the count for these files and not a rate for real repositories. I know of classes that would raise it: a security document that quotes an attack phrase such as "ignore previous instructions" is BLOCK, a Latin word mixed with a Greek or Cyrillic letter in prose is QUARANTINE, a URL host with accented letters is BLOCK, and a role marker such as SYSTEM: in capitals at the start of a line is BLOCK.
 
 ## Limitations
 
-Small synthetic corpus. Replace before drawing conclusions.
+- It is a pattern scanner. A new paraphrase of an instruction, such as a request phrased as a polite question or split across several sentences, passes.
+- Semantic attacks pass: a README that tells an agent to trust a malicious package in plain, ordinary language has no pattern to match.
+- Text inside images, PDFs and other binary formats is not read. A non-UTF-8 file is BLOCK, so binary files are refused, not understood.
+- Only base64 and hex are decoded, to two levels. Other encodings, ciphers and compression pass.
+- The override and role lists are English and short. Other languages pass.
+- Homoglyph checks cover Cyrillic and Greek. Other look-alike scripts and mixed-script words shorter than three Latin letters pass, and inline code in prose is not treated as a shell command.
+- It scans one input at a time. An instruction split across two files or two tool calls is not joined.
+- Input over 1 MiB is BLOCK, which is a size cap and not a judgment about the content.
+
+## CI
+
+The workflow in .github/workflows/ci.yml runs `python evaluate.py` and `python -m pytest -q` on push and pull request, with each action pinned to a commit.
+
+## RED run
+
+red/RED-run.txt holds the run made before the scanner existed: the tests were written first against a stub that passed everything, and every attack test failed.
+
+## License
+
+MIT, see LICENSE.
