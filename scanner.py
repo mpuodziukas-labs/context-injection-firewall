@@ -6,6 +6,7 @@ Fail closed: unreadable input, undecodable bytes, oversize input or any scanner 
 import base64
 import binascii
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -400,7 +401,7 @@ def _fail(name, rule, detail, offset=None):
             "findings": [{"rule": rule, "severity": "BLOCK", "offset": offset, "detail": detail}]}
 
 
-def scan_input(data, name="<input>"):
+def _scan_stage1(data, name="<input>"):
     try:
         if not isinstance(data, (bytes, bytearray)):
             return _fail(name, "fail-closed-error", "input is not bytes")
@@ -425,22 +426,114 @@ def scan_input(data, name="<input>"):
         return _fail(name, "fail-closed-error", f"scanner error: {type(e).__name__}")
 
 
-def scan_path(path):
+_RANK = {"PASS": 0, "QUARANTINE": 1, "BLOCK": 2}
+CASCADE_MODEL = "protectai-deberta-v3-pi-v2"
+CASCADE_THRESHOLD = 0.5   # model card default: argmax of two classes, i.e. P(injection) > 0.5
+CASCADE_WINDOWS = 8       # more 510-token windows than this is not scanned in full, so it is quarantined
+_S2 = {}
+
+
+def _stricter(a, b):
+    return a if _RANK[a] >= _RANK[b] else b
+
+
+def _stage2_fail(rule, detail):
+    return {"verdict": "QUARANTINE", "reason": rule, "score": None, "detail": detail}
+
+
+def _s2_session(model_dir):
+    """Load once per process: verify pinned sha256, then build the CPU session. Raises on any problem."""
+    key = str(model_dir)
+    if key in _S2:
+        return _S2[key]
+    import hashlib
+    import onnxruntime as ort
+    from tokenizers import Tokenizer
+    root = os.path.dirname(os.path.abspath(__file__))
+    pins = {}
+    for line in open(os.path.join(root, "models.lock"), encoding="utf-8"):
+        if line.strip() and not line.startswith("#"):
+            sha, _size, rel = line.split()
+            pins[rel] = sha
+    for rel, sha in pins.items():
+        h = hashlib.sha256()
+        with open(os.path.join(model_dir, os.path.basename(rel)), "rb") as fh:
+            for blk in iter(lambda: fh.read(1 << 22), b""):
+                h.update(blk)
+        if h.hexdigest() != sha:
+            raise ValueError("sha256 mismatch")
+    opts = ort.SessionOptions()
+    opts.intra_op_num_threads = 4
+    opts.inter_op_num_threads = 1
+    sess = ort.InferenceSession(os.path.join(model_dir, "model.onnx"), opts, providers=["CPUExecutionProvider"])
+    tok = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+    tok.enable_truncation(max_length=510, stride=0)
+    _S2[key] = (sess, tok, {i.name for i in sess.get_inputs()})
+    return _S2[key]
+
+
+def stage2(text):
+    """Classifier verdict for text: PASS, or QUARANTINE. Any problem loading or running the model is QUARANTINE."""
+    try:
+        model_dir = os.environ.get("CASCADE_MODEL_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", CASCADE_MODEL, "onnx")
+        if not os.path.isfile(os.path.join(model_dir, "model.onnx")):
+            return _stage2_fail("classifier-unavailable", "stage-2 model not found; fail closed")
+        try:
+            sess, tok, names = _s2_session(model_dir)
+        except Exception as e:
+            return _stage2_fail("classifier-unavailable", f"stage-2 model failed to load: {type(e).__name__}")
+        import numpy as np
+        enc = tok.encode(text)
+        wins = [enc] + list(enc.overflowing)
+        if len(wins) > CASCADE_WINDOWS:
+            return _stage2_fail("classifier-oversize", f"input needs more than {CASCADE_WINDOWS} windows")
+        best = 0.0
+        for w in wins:
+            feed = {"input_ids": np.array([w.ids], dtype=np.int64), "attention_mask": np.array([w.attention_mask], dtype=np.int64)}
+            logits = sess.run(None, {k: v for k, v in feed.items() if k in names})[0][0]
+            e = np.exp(logits - logits.max())
+            best = max(best, float(e[1] / e.sum()))
+        if best > CASCADE_THRESHOLD:
+            return {"verdict": "QUARANTINE", "reason": "classifier-injection", "score": round(best, 4), "detail": f"classifier P(injection)={best:.3f}"}
+        return {"verdict": "PASS", "reason": None, "score": round(best, 4), "detail": ""}
+    except Exception as e:
+        return _stage2_fail("classifier-error", f"stage-2 error: {type(e).__name__}")
+
+
+def scan_input(data, name="<input>", cascade=False):
+    s1 = _scan_stage1(data, name)
+    if not cascade:
+        return s1
+    if s1["verdict"] == "BLOCK":
+        return dict(s1, stage=1)
+    s2 = stage2(bytes(data).decode("utf-8"))
+    if _stricter(s1["verdict"], s2["verdict"]) == s1["verdict"]:
+        return dict(s1, stage=1)
+    found = s1["findings"] + [{"rule": s2["reason"], "severity": s2["verdict"], "offset": 0, "detail": s2["detail"]}]
+    return {"input": name, "verdict": s2["verdict"], "reason": s2["reason"], "offset": 0, "findings": found, "stage": 2}
+
+
+def scan_path(path, cascade=False):
     try:
         with open(path, "rb") as fh:
             data = fh.read(MAX_BYTES + 1)
     except OSError as e:
         return _fail(str(path), "fail-closed-unreadable", f"cannot read input: {type(e).__name__}")
-    return scan_input(data, str(path))
+    return scan_input(data, str(path), cascade)
 
 
 def main(argv):
     if not argv:
         print("usage: scanner.py FILE...", file=sys.stderr)
         return 3
+    cascade = "--cascade" in argv
+    argv = [a for a in argv if a != "--cascade"]
+    if not argv:
+        print("usage: scanner.py [--cascade] FILE...", file=sys.stderr)
+        return 3
     worst = 0
     for p in argv:
-        v = scan_input(sys.stdin.buffer.read(), "-") if p == "-" else scan_path(p)
+        v = scan_input(sys.stdin.buffer.read(), "-", cascade) if p == "-" else scan_path(p, cascade)
         print(json.dumps(v, ensure_ascii=True))
         worst = max(worst, {"PASS": 0, "QUARANTINE": 1, "BLOCK": 2}[v["verdict"]])
     return worst

@@ -1,0 +1,40 @@
+    def mutated(old, new):
+        src = (ROOT / "scanner.py").read_text()
+>       assert src.count(old) == 1, f"mutation anchor not unique or missing: {old!r}"
+E       AssertionError: mutation anchor not unique or missing: 'if s1["verdict"] == "BLOCK":'
+E       assert 0 == 1
+E        +  where 0 = <built-in method count of str object at 0x9e6430000>('if s1["verdict"] == "BLOCK":')
+E        +    where <built-in method count of str object at 0x9e6430000> = '"""Scan text before it enters an agent\'s context. Verdict PASS, QUARANTINE or BLOCK, with reason and byte offset.\n\...": 1, "BLOCK": 2}[v["verdict"]])\n    return worst\n\n\nif __name__ == "__main__":\n    sys.exit(main(sys.argv[1:]))\n'.count
+
+tests/test_cascade.py:121: AssertionError
+_______________________ test_mutant_verdict_not_stricter _______________________
+
+    def test_mutant_verdict_not_stricter():
+>       mod = mutated("return a if _RANK[a] >= _RANK[b] else b", "return b")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_cascade.py:138: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+old = 'return a if _RANK[a] >= _RANK[b] else b', new = 'return b'
+
+    def mutated(old, new):
+        src = (ROOT / "scanner.py").read_text()
+>       assert src.count(old) == 1, f"mutation anchor not unique or missing: {old!r}"
+E       AssertionError: mutation anchor not unique or missing: 'return a if _RANK[a] >= _RANK[b] else b'
+E       assert 0 == 1
+E        +  where 0 = <built-in method count of str object at 0x9e68ec000>('return a if _RANK[a] >= _RANK[b] else b')
+E        +    where <built-in method count of str object at 0x9e68ec000> = '"""Scan text before it enters an agent\'s context. Verdict PASS, QUARANTINE or BLOCK, with reason and byte offset.\n\...": 1, "BLOCK": 2}[v["verdict"]])\n    return worst\n\n\nif __name__ == "__main__":\n    sys.exit(main(sys.argv[1:]))\n'.count
+
+tests/test_cascade.py:121: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cascade.py::test_cascade_adds_stage_field_only - TypeError:...
+FAILED tests/test_cascade.py::test_model_missing_is_quarantine_not_pass - Typ...
+FAILED tests/test_cascade.py::test_cli_cascade_model_missing_exits_1 - json.d...
+FAILED tests/test_cascade.py::test_hash_mismatch_is_quarantine - TypeError: s...
+FAILED tests/test_cascade.py::test_models_lock_pins_a_sha256 - assert False
+FAILED tests/test_cascade.py::test_invariants_hold_on_the_real_module - TypeE...
+FAILED tests/test_cascade.py::test_mutant_stage2_fail_open - AssertionError: ...
+FAILED tests/test_cascade.py::test_mutant_stage_order_swap - AssertionError: ...
+FAILED tests/test_cascade.py::test_mutant_verdict_not_stricter - AssertionErr...
+9 failed, 2 passed, 5 skipped in 0.11s
