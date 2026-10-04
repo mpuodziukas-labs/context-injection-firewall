@@ -1,0 +1,66 @@
+RED run v2: tests/test_v2.py and cases_v2.jsonl were written first, against the v1 scanner.py (branch v2-normalize, before any canonicalization code).
+Command: python3 -m pytest -q tests/test_v2.py --tb=line
+Result: the new attacks that need canonicalization fail because v1 lets them through; benign controls pass; mutant tests fail their control step because the targets do not exist yet.
+
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-cgj]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-hangul-filler]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-lrm-rlm]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-variation-selector]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-invisible-times]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-dotless-i]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-cyrillic-t]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-ipa-g-a]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-palochka]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-spaced-letters]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-dotted-letters]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-dashed-chunks]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-star-joined]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-dot-joined]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-underscore-letters]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-spaced-reveal]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-url-encoded]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-url-full]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-hex-escape]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-hex-spaced]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-hex-0x]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-b64-short]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-b64-spaced-payload]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-fullwidth-role]
+FAILED tests/test_v2.py::test_v2_attack_is_caught[v-url-role]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-cgj]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-hangul-filler]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-lrm-rlm]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-variation-selector]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-invisible-times]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-dotless-i]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-cyrillic-t]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-ipa-g-a]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-palochka]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-spaced-letters]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-dotted-letters]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-dashed-chunks]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-star-joined]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-dot-joined]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-underscore-letters]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-spaced-reveal]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-url-encoded]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-url-full]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-hex-escape]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-hex-spaced]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-hex-0x]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-b64-short]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-b64-spaced-payload]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-fullwidth-role]
+FAILED tests/test_v2.py::test_v2_offset_points_into_raw_input[v-url-role]
+FAILED tests/test_v2.py::test_invisible_extras_are_not_findings_but_stay_caught
+FAILED tests/test_v2.py::test_cli_contract_unchanged
+FAILED tests/test_v2.py::test_v2_mutant_extra_invisibles_not_stripped
+FAILED tests/test_v2.py::test_v2_mutant_extra_confusables_removed
+FAILED tests/test_v2.py::test_v2_mutant_letter_run_not_joined
+FAILED tests/test_v2.py::test_v2_mutant_inword_punctuation_kept
+FAILED tests/test_v2.py::test_v2_mutant_squash_patterns_removed
+FAILED tests/test_v2.py::test_v2_mutant_percent_decode_disabled
+FAILED tests/test_v2.py::test_v2_mutant_escape_hex_decode_disabled
+FAILED tests/test_v2.py::test_v2_mutant_short_base64_not_scanned
+FAILED tests/test_v2.py::test_v2_mutant_canonical_pass_removed
+61 failed, 11 passed in 0.11s

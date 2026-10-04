@@ -1,0 +1,2 @@
+Variables i j k l and a b c d e are indices in the matrix notation.
+Options: x y z w.

@@ -52,6 +52,36 @@ The benign corpus is 16 files in corpus/benign: a README with badges, pinned lin
 
 The tests also break the scanner on purpose and require the table to change each time. Each mutant removes one defense: tag characters, bidi characters, zero-width characters, the override patterns, the role patterns, the template slot check, the readable-text check for blobs, the decoder, the confusable scripts, the confusable fold, the normalization step, the fail-closed verdict and the size cap.
 
+## v2 canonicalization
+
+Branch v2-normalize adds a canonical copy of the input that is scanned next to the raw input. The verdict is the stricter of the two, and every finding offset is a byte offset into the raw input. The CLI contract and the JSON verdict are unchanged.
+
+The canonical copy is built in this order:
+
+1. Drop extra invisible characters (combining grapheme joiner, Hangul fillers, left-to-right and right-to-left marks, invisible math operators, variation selectors) without a finding. The existing zero-width, bidi and tag findings stay as they were.
+2. Decode one level of percent-encoding, `\xNN` escapes, `0xNN` values and spaced hex pairs, when the decoded text is printable.
+3. NFKC, casefold and the v1 confusable fold, then a second confusable table from TR39 for Latin, Cyrillic and Greek look-alikes.
+4. Join runs of four or more single letters split by spaces or punctuation, then drop punctuation between letters inside a word.
+5. Match the same override and role rules on the canonical text. Four override rules also run with optional whitespace, but only where a join happened in step 4.
+6. Base64 runs of 8 or more characters are decoded and the decoded text is canonicalized and scanned.
+
+Tests: cases_v2.jsonl holds 26 synthetic attacks (invisible, homoglyph, spacing, encoded, role) and corpus_v2 holds 8 benign controls close to those rules. tests/test_v2.py has one mutant per step. RED-RUN-V2.txt is the run made before the code existed.
+
+Measured, not tuned. The command was `GUARD_ROOT=<folder with v1 or v2 firewall plus the other two guards> python3 evaluate.py` in guard-blind-evals. No case file, miss file or prediction file was read to design a rule.
+
+| set | version | TP | FP | TN | FN | precision [95% CI] | recall [95% CI] |
+|---|---|---|---|---|---|---|---|
+| in-house held-out (47 attacks, 52 benign) | v1 | 18 | 2 | 50 | 29 | 0.90 [0.70, 0.97] | 0.38 [0.26, 0.53] |
+| in-house held-out (47 attacks, 52 benign) | v2 | 20 | 2 | 50 | 27 | 0.91 [0.72, 0.97] | 0.43 [0.30, 0.57] |
+| deepset/prompt-injections sample (188 attacks, 312 benign) | v1 | 10 | 2 | 310 | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
+| deepset/prompt-injections sample (188 attacks, 312 benign) | v2 | 10 | 2 | 310 | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
+
+False positives on the benign corpus in this repo: 0 of 16 before and 0 of 16 after. The 8 v2 benign controls: 0 of 8 before and 0 of 8 after. pytest: 128 passed before, 202 passed after.
+
+The intervals overlap on both sets, so the in-house gain of 2 true positives is not a proven change in recall, and the public sample shows no change.
+
+Limitations: semantic paraphrase is still out of reach for a pattern scanner. The public sample is mostly natural-language and non-English instructions, and canonicalization does not touch those.
+
 ## Honesty
 
 This is a small deterministic scanner, not a product, and it is a pattern check, not a defense in depth: it reads text and returns a verdict, and it does not contain an agent that ignores the verdict. The cases in cases.jsonl and the files in corpus/benign are synthetic and written for this repo. I did not test it against a real agent, real web pages or a real repository.

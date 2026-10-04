@@ -9,6 +9,7 @@ import json
 import re
 import sys
 import unicodedata
+import urllib.parse
 
 FAIL_VERDICT = "BLOCK"
 MAX_BYTES = 1 << 20
@@ -249,6 +250,151 @@ def detect_encoded(text):
     return out
 
 
+# ---- v2 canonicalization: scan a canonical copy of the text next to the raw text -------------------
+# Order: strip extra invisibles, decode one level of URL / hex-escape / hex-dump text, _norm (NFKC, casefold,
+# base confusable fold), extra confusable fold, join single-letter runs, drop punctuation inside words.
+# Every step keeps an index map back to the raw text, so finding offsets point into the raw input.
+INVISIBLE_V2 = (frozenset({0x34F, 0x61C, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180E, 0x200E, 0x200F,
+                           0x2061, 0x2062, 0x2063, 0x2064, 0x3164, 0xFFA0})
+                | frozenset(range(0xFE00, 0xFE10)) | frozenset(range(0xE0100, 0xE01F0)))
+# TR39 confusables not already in FOLD: dotless i, IPA a and g, Cyrillic d h l q w v, and Cyrillic/Greek k m h t b.
+CONFUSABLES_V2 = {ord(a): b for a, b in zip("\u0131\u0251\u0261\u0501\u04bb\u04cf\u051b\u051d\u0475\u043a\u043c\u043d\u0442\u0432\u03ba",
+                                           "iagdhlqwvkmhtbk")}
+SPACED_RUN = re.compile(r"(?<![a-z0-9])[a-z](?:[ .\-_*|/\u00b7\u2022~^,;:'+][a-z]){3,}(?![a-z0-9])")
+INWORD_PUNCT = re.compile(r"(?<=[a-z])[.\-*|\u00b7\u2022~^'+]+(?=[a-z])")
+TOKEN = re.compile(r"\S+")
+HEX_TEXT_RUN = re.compile(r"(?:\\x[0-9A-Fa-f]{2}){4,}|(?:0x[0-9A-Fa-f]{2}[ ,;:]*){4,}"
+                          r"|(?<![0-9A-Za-z])(?:[0-9A-Fa-f]{2}[ ,:;-]){7,}[0-9A-Fa-f]{2}(?![0-9A-Za-z])")
+B64_RUN_V2 = re.compile(r"(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{8,}={0,2}")
+# Same wording as four override patterns with the whitespace made optional, used only where a join happened.
+SQUASH_PATTERNS = tuple(re.compile(OVERRIDE_PATTERNS[i].pattern.replace(r"\s+", r"\s*")) for i in (0, 1, 3, 4))
+
+
+def _printable(t):
+    return bool(t) and all(c.isprintable() or c.isspace() for c in t)
+
+
+def _decode_percent(tok):
+    """Percent-decode one whitespace-free token holding three or more %XX groups, or None."""
+    if len(re.findall(r"%[0-9A-Fa-f]{2}", tok)) < 3:
+        return None
+    try:
+        d = urllib.parse.unquote(tok, errors="strict")
+    except UnicodeDecodeError:
+        return None
+    return d if _printable(d) else None
+
+
+def _decode_hex_text(run):
+    """Decode a run of \\xNN escapes, 0xNN values or spaced hex pairs to printable text, or None."""
+    h = re.sub(r"\\x|0x|[\s,;:-]", "", run)
+    if not re.fullmatch(r"(?:[0-9A-Fa-f]{2})+", h):
+        return None
+    try:
+        d = bytes.fromhex(h).decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return d if _printable(d) else None
+
+
+def _pre(text):
+    """Drop extra invisibles, then decode one level of URL, hex-escape and hex-dump text. Returns (text, idx)."""
+    s, idx = [], []
+    for i, ch in enumerate(text):
+        if ord(ch) not in INVISIBLE_V2:
+            s.append(ch)
+            idx.append(i)
+    s, idx = "".join(s), idx
+    for regex, decode in ((TOKEN, _decode_percent), (HEX_TEXT_RUN, _decode_hex_text)):
+        o, oi, pos = [], [], 0
+        for m in regex.finditer(s):
+            d = decode(m.group())
+            if d is None:
+                continue
+            o.append(s[pos:m.start()])
+            oi += idx[pos:m.start()]
+            o.append(d)
+            oi += [idx[m.start()]] * len(d)
+            pos = m.end()
+        o.append(s[pos:])
+        oi += idx[pos:]
+        s, idx = "".join(o), oi
+    return s, idx
+
+
+def _delete(n, idx, touched, drop, mark):
+    keep = [k for k in range(len(n)) if k not in drop]
+    return ("".join(n[k] for k in keep), [idx[k] for k in keep], [touched[k] or k in mark for k in keep])
+
+
+def _join_letter_runs(n, idx, touched):
+    """'i g n o r e' and 'i.g.n.o.r.e' become 'ignore'; every letter of a joined run is marked touched."""
+    drop, mark = set(), set()
+    for m in SPACED_RUN.finditer(n):
+        drop.update(range(m.start() + 1, m.end(), 2))
+        mark.update(range(m.start(), m.end()))
+    return _delete(n, idx, touched, drop, mark)
+
+
+def _strip_inword_punct(n, idx, touched):
+    """'ig-nore' and 'ignore*previous' lose the punctuation between letters; the two neighbours are marked touched."""
+    drop, mark = set(), set()
+    for m in INWORD_PUNCT.finditer(n):
+        drop.update(range(m.start(), m.end()))
+        mark.update((m.start() - 1, m.end()))
+    return _delete(n, idx, touched, drop, mark)
+
+
+def _canon(text):
+    """Canonical text, a map from each canonical char to its index in text, and a touched flag per char."""
+    s, idx0 = _pre(text)
+    n, idx1 = _norm(s)
+    idx = [idx0[k] for k in idx1]
+    n = n.translate(CONFUSABLES_V2)
+    touched = [False] * len(n)
+    n, idx, touched = _join_letter_runs(n, idx, touched)
+    return _strip_inword_punct(n, idx, touched)
+
+
+def _instruction_canon(text):
+    n, _, touched = _canon(text)
+    if any(p.search(n) for p in OVERRIDE_PATTERNS + EXEC_PATTERNS):
+        return True
+    return any(any(touched[m.start():m.end()]) for p in SQUASH_PATTERNS for m in p.finditer(n))
+
+
+def detect_canonical(text):
+    out = []
+    n, idx, touched = _canon(text)
+    for p in OVERRIDE_PATTERNS:
+        for m in p.finditer(n):
+            out.append(_f(text, "override", "BLOCK", idx[m.start()], "instruction override after canonicalization"))
+    for p in SQUASH_PATTERNS:
+        for m in p.finditer(n):
+            if any(touched[m.start():m.end()]):
+                out.append(_f(text, "override", "BLOCK", idx[m.start()], "instruction override after joining split letters"))
+    for p in ROLE_PATTERNS[:3]:
+        for m in p.finditer(n):
+            out.append(_f(text, "role-spoof", "BLOCK", idx[m.start()], "role or tool-result marker after canonicalization"))
+    return out
+
+
+def _decoded_instruction_v2(s, depth=0):
+    d = _decode(s)
+    if d is None:
+        return False
+    if _instruction_canon(d):
+        return True
+    if depth < 2:
+        return any(_decoded_instruction_v2(m.group(), depth + 1) for m in B64_RUN_V2.finditer(d))
+    return False
+
+
+def detect_encoded_v2(text):
+    return [_f(text, "encoded-instruction", "BLOCK", m.start(), "encoded run decodes to an instruction")
+            for m in B64_RUN_V2.finditer(text) if _decoded_instruction_v2(m.group())]
+
+
 def _fail(name, rule, detail, offset=None):
     return {"input": name, "verdict": FAIL_VERDICT, "reason": rule, "offset": offset,
             "findings": [{"rule": rule, "severity": "BLOCK", "offset": offset, "detail": detail}]}
@@ -265,8 +411,10 @@ def scan_input(data, name="<input>"):
         except UnicodeDecodeError as e:
             return _fail(name, "fail-closed-undecodable", "input is not valid UTF-8", e.start)
         found = []
-        for detector in (detect_unicode, detect_override, detect_exfil, detect_homoglyph, detect_encoded):
+        for detector in (detect_unicode, detect_override, detect_exfil, detect_homoglyph, detect_encoded,
+                         detect_canonical, detect_encoded_v2):
             found += detector(text)
+        found = list({(f["rule"], f["offset"]): f for f in reversed(found)}.values())[::-1]
         found.sort(key=lambda f: (f["severity"] != "BLOCK", f["offset"]))
         found = found[:MAX_FINDINGS]
         if not found:
