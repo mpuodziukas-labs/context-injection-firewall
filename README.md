@@ -82,6 +82,31 @@ The intervals overlap on both sets, so the in-house gain of 2 true positives is 
 
 Limitations: semantic paraphrase is still out of reach for a pattern scanner. The public sample is mostly natural-language and non-English instructions, and canonicalization does not touch those.
 
+## v3 cascade
+
+`python3 scanner.py --cascade FILE` adds stage 2 after the pattern scanner. A stage-1 BLOCK ends the run. Otherwise a small classifier reads the text and the stricter verdict wins. The default run is unchanged, and the JSON gains one field, `stage` (1 or 2), only under `--cascade`. A classifier hit is QUARANTINE, not BLOCK, because a classifier is a probability.
+
+- Model: protectai/deberta-v3-base-prompt-injection-v2, Apache-2.0, 184,423,682 parameters, ONNX on CPU (onnxruntime, at most 4 threads). It is not in this repo. Download the `onnx/` files into `models/protectai-deberta-v3-pi-v2/onnx/` and check them against `models.lock` (model.onnx sha256 f0ea7f23...228c, tokenizer.json sha256 752fe5f0...ff2f). Tests never download.
+- Fail closed: weights missing, sha256 mismatch, load or run error, or input needing more than 8 windows of 510 tokens is QUARANTINE, never PASS. Longer text is scanned in windows, and the highest score counts.
+- Threshold: the model card default, P(injection) > 0.5. Not tuned. My own 23-row synthetic dev set (`cascade_dev.jsonl`: 6 English paraphrases, 9 attacks in Spanish, German and French, 8 benign) was written before any measurement. It does not separate the classes at any threshold, so the default stays.
+- Training data, from the card: natolambert/xstest-v2-copy, VMware/open-instruct, alespalla/chatbot_instruction_prompts, HuggingFaceH4/grok-conversation-harmless, Harelix/Prompt-Injection-Mixed-Techniques-2024, OpenSafetyLab/Salad-Data, jackhhao/jailbreak-classification. deepset/prompt-injections is not listed, so the deepset number is not labelled contaminated. The card also says some injections were crafted from papers, competitions and community feedback, so overlap cannot be ruled out from the card. The card says the model is English only and gives no per-language numbers.
+- Considered and not used: Llama Prompt-Guard-2 22M and 86M (gated, Llama license).
+
+Measured once after the code was fixed, with `guard-blind-evals/evaluate.py` on temp copies of the three guards, the firewall run with `--cascade`. No tuning after.
+
+| set | TP | FP | TN | FN | precision [95% CI] | recall [95% CI] |
+|---|---|---|---|---|---|---|
+| in-house blind, v2 alone | 20 | 2 | | | 0.91 [0.72, 0.97] | 0.43 [0.30, 0.57] |
+| in-house blind, v3 cascade | 45 | 17 | 35 | 2 | 0.73 [0.60, 0.82] | 0.96 [0.86, 0.99] |
+| deepset sample (188 attacks, 312 benign), v2 alone | 10 | 2 | | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
+| deepset sample, v3 cascade | 86 | 5 | 307 | 102 | 0.95 [0.88, 0.98] | 0.46 [0.39, 0.53] |
+
+- Benign false positives on the in-house blind set: 17 of 52. On this repo's benign corpus, 6 of 24 files are flagged (documentation, JSON, CSV, a hex dump, identifiers). The goal was at most 1 of 24, so it is not met. Cascade precision 0.73 has a lower bound of 0.60, below the v2 lower bound of 0.72, so that goal is not met either.
+- Stage-2 latency over 500 inputs (the 23 dev rows repeated, short texts, warm model, this Mac, CPU): p50 22.5 ms, p95 29.3 ms, max 33.1 ms. Goal of 50 ms met. Longer inputs cost more per window. Process start with hash check and model load is about 1.5 s per CLI call.
+- Recall 0.96 on the in-house set meets the 0.90 goal. Recall on the deepset sample is 0.46 and misses the goal: the sample is largely non-English and the model is English only. The in-house miss list is not published here because the blind-eval rules keep case and miss files unread.
+
+Limitations of v3: the benign false-positive rate is high for documentation, structured data and instruction-style text such as setup steps, so a reviewer will see many QUARANTINE verdicts. The classifier has no per-language numbers from its card, and my dev set is 15 attacks. Windows and the 8-window cap mean a very long file is quarantined, not judged. Only a stage-1 BLOCK is final. The in-house blind set was already used to evaluate v1 and v2, so it is not fresh. Stage 3 (taint flow at tool sinks) is not part of this change.
+
 ## Honesty
 
 This is a small deterministic scanner, not a product, and it is a pattern check, not a defense in depth: it reads text and returns a verdict, and it does not contain an agent that ignores the verdict. The cases in cases.jsonl and the files in corpus/benign are synthetic and written for this repo. I did not test it against a real agent, real web pages or a real repository.
