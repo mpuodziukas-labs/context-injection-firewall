@@ -76,7 +76,7 @@ Measured, not tuned, with a harness outside this repo. The v1 and v2 rows below 
 | deepset/prompt-injections sample (188 attacks, 312 benign) | v1 | 10 | 2 | 310 | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
 | deepset/prompt-injections sample (188 attacks, 312 benign) | v2 | 10 | 2 | 310 | 178 | 0.83 [0.55, 0.95] | 0.05 [0.03, 0.10] |
 
-False positives on the benign corpus in this repo: 0 of 16 before and 0 of 16 after. The 8 v2 benign controls: 0 of 8 before and 0 of 8 after. pytest: 128 passed before, 202 passed after.
+False positives on the benign corpus in this repo: 0 of 16 before and 0 of 16 after. The 8 v2 benign controls: 0 of 8 before and 0 of 8 after. pytest: 128 passed before, 202 passed after. Current suite, from `python -m pytest -q` on this tree: 228 passed, 28 skipped (the skips are the stage-2 tests that need classifier weights, which are not in the repo).
 
 The intervals overlap on both sets, so the in-house gain of 2 true positives is not a proven change in recall, and the public sample shows no change.
 
