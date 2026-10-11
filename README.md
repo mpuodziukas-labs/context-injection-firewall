@@ -154,3 +154,5 @@ red/RED-run.txt holds the run made before the scanner existed: the tests were wr
 ## License
 
 MIT, see LICENSE.
+
+Agent verification contract: [AGENTS.md](AGENTS.md)
