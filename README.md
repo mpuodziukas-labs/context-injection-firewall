@@ -4,6 +4,29 @@ Proves: planted hidden instructions in text an agent loads are stopped before th
 
 A coding agent reads repo files, web pages and tool output as context. One planted line in any of them can take over the agent, and nobody sees it because the line is invisible, encoded or dressed up as data. The team that owns the repository and the credentials pays for it, through a leaked key, a poisoned commit or a command nobody typed.
 
+## Ticket
+
+| Field | Value |
+|---|---|
+| Ticket | context-injection-firewall 2026-10-25 |
+| Status | LIVE |
+| Severity of a false pass | A planted hidden instruction in a repo file, web text or tool output reaches the agent because the gate printed all-N/N, and the agent acts on a command nobody typed. |
+| Scope (in) | A pattern scan of text before it enters agent context, over six attack classes (invisible-unicode, instruction-override, exfil-beacon, homoglyph, encoded-payload, fail-closed) and a benign corpus that must pass. |
+| Out of scope | Semantic paraphrase, text inside images and binary formats, non-English instructions, instructions split across inputs and any agent behaviour (see Limitations). |
+| Owner | Michael Puodziukas, michael@puodziukas.dev |
+| Opened | 2026-10-04 |
+| Last verified | 2026-10-25, `attacks caught 49/49, benign passed 16/16` |
+| Oracle | `python3 evaluate.py`, last line `attacks caught 49/49, benign passed 16/16`; `python3 mutants.py`, last line `mutants killed 26/26` |
+| Dependencies | Runtime: Python 3 standard library only for the default scan. Optional stage 2 (`--cascade`): onnxruntime, tokenizers and numpy, plus model files that are not in the repo. Test: pytest. |
+| Supported platforms | macOS (both oracles measured here, rc=0); Linux through the ubuntu-latest runner in .github/workflows/ci.yml (not measured here). |
+
+## Quick start
+
+```bash
+python3 evaluate.py
+python3 mutants.py
+```
+
 ## Run it (60s)
 
 ```
@@ -107,6 +130,51 @@ Measured once with `guard-blind-evals/evaluate.py` on temp copies of the three g
 
 Limitations of v3: the benign false-positive rate is high for documentation, structured data and instruction-style text such as setup steps, so a reviewer will see many QUARANTINE verdicts. The classifier has no per-language numbers from its card, and my dev set is 15 attacks. Windows and the 8-window cap mean a file over about 3,100 tokens (roughly 13,000 characters of prose) is quarantined, not judged. Turkish is a known miss: the English-only classifier scores a Turkish paraphrase of an override at 0.005 and the scanner passes it (planted as a strict xfail in tests/test_hostile.py). No keyword list for one language was added. Only a stage-1 BLOCK is final. The in-house blind set was already used to evaluate v1 and v2, so it is not fresh. Stage 3 (taint flow at tool sinks) is not part of this change.
 
+## Normal procedure
+
+1. From the repo root run `python3 evaluate.py`. It prints two tables and a summary line, and exits with code zero when every count is N/N and the benign files all pass, code one otherwise.
+2. Read the rows. Each attack class row counts the planted cases in `cases.jsonl` that got exactly the labeled verdict and rule. The benign row counts the files in `corpus/benign` that got the verdict PASS. The summary line adds the attack rows and repeats the benign count.
+3. PASS means every row reads N/N, exactly as quoted here:
+
+```text
+| attack class | caught |
+|---|---|
+| invisible-unicode | 10/10 |
+| instruction-override | 14/14 |
+| exfil-beacon | 8/8 |
+| homoglyph | 6/6 |
+| encoded-payload | 5/5 |
+| fail-closed | 6/6 |
+
+| benign corpus | passed |
+|---|---|
+| files with no attack | 16/16 |
+
+attacks caught 49/49, benign passed 16/16
+```
+
+4. Run `python3 mutants.py` to prove the tests can fail. It copies the repo to a temporary directory, applies each planted edit to `scanner.py`, and requires the matching test file to go red. PASS ends with `mutants killed 26/26`.
+
+Scan a file yourself: `python3 scanner.py FILE` (exit 0 PASS, 1 QUARANTINE, 2 BLOCK).
+
+## Abnormal procedure
+
+| Symptom | Cause | Action | Oracle |
+|---|---|---|---|
+| `evaluate.py` exits with code one and an attack class row is short | A planted case in `cases.jsonl` no longer gets its labeled verdict and rule, or a detector changed | Put the case text in a file, run `python3 scanner.py FILE` on it and compare the verdict and the rule with the label | `python3 evaluate.py` |
+| The benign row is short | A file in `corpus/benign` now trips a rule | Run `python3 scanner.py` on each benign file and read the `reason` of the one that is not PASS | `python3 evaluate.py` |
+| `mutants.py` prints a LIVE line | A defense edit that the tests do not detect, which is a gap in the test files | Add or tighten a test until that line prints RED | `python3 mutants.py` |
+| `mutants.py` prints `control FAIL` or `pattern matched` | The unmodified tests fail in the copy (for example pytest is missing), or the source line a mutant targets has moved | Run `python3 -m pip install pytest`, or update the pattern in `mutants.py` | `python3 mutants.py` |
+| `python3 scanner.py --cascade FILE` returns QUARANTINE on every file | The model files are missing, or their sha256 does not match `models.lock` (stage 2 fails closed) | Download the model files as described in the v3 cascade section and set `CASCADE_MODEL_DIR` | `python3 scanner.py --cascade FILE` |
+
+## Emergency procedure
+
+The gate printed PASS but a planted instruction still reached the agent: a file the scanner passed carried a hidden or encoded instruction.
+
+1. Freeze: stop loading new files into agent context on the strength of this gate, and record the repo commit and the exact file that got through.
+2. Replay: run `python3 scanner.py FILE` on the offending file. If it exits with code zero, add the file text as a single-attack case in `cases.jsonl` with its class, verdict and rule, fix or add the detector in `scanner.py`, and add a mutant to `mutants.py`. Then run `python3 evaluate.py` and `python3 mutants.py` and expect every count N/N.
+3. Tell: the owner (michael@puodziukas.dev) and every team that loads context through this gate. Name the missing rule and the Limitations item that covers it.
+
 ## Honesty
 
 This is a small deterministic scanner, not a product, and it is a pattern check, not a defense in depth: it reads text and returns a verdict, and it does not contain an agent that ignores the verdict. The cases in cases.jsonl and the files in corpus/benign are synthetic and written for this repo. I did not test it against a real agent, real web pages or a real repository.
@@ -124,6 +192,7 @@ The false positive count on the benign corpus is 0 of 16. That corpus is small a
 - It scans one input at a time. An instruction split across two files or two tool calls is not joined.
 - Input containing a NUL byte is BLOCK (binary input is refused).
 - Input over 1 MiB is BLOCK, which is a size cap and not a judgment about the content.
+- The pytest suite and the stage-2 model tests are not part of the evidence below and were not run for this restructuring.
 
 ## CI
 
@@ -150,6 +219,60 @@ An adversarial review (RED-RUN-REVIEW.txt) found 23 rows: kill 2, high 6, med 6,
 ## RED run
 
 red/RED-run.txt holds the run made before the scanner existed: the tests were written first against a stub that passed everything, and every attack test failed.
+
+## Architecture
+
+| Path | Role | Lines |
+|---|---|---|
+| `scanner.py` | The scanner: detectors, canonicalization, optional stage 2, command line | 568 |
+| `evaluate.py` | The oracle: runs every planted case and the benign corpus, prints the tables | 54 |
+| `mutants.py` | Mutation check: edits copies of `scanner.py` and requires the matching test file to go red | 81 |
+| `cases.jsonl` | Planted attack cases with expected verdict and rule | 49 |
+| `cases_v2.jsonl` | Planted attack cases for the canonicalization step | 26 |
+| `cascade_dev.jsonl` | Synthetic dev set for the stage-2 threshold | 23 |
+| `models.lock` | Pinned sha256 values for the stage-2 model files | 20 |
+| `tests/test_proof.py` | Proof tests: table matches output, offsets, verdicts | 152 |
+| `tests/test_hostile.py` | Hostile-review tests | 209 |
+| `tests/test_v2.py` | Canonicalization tests, one mutant per step | 110 |
+| `tests/test_cascade.py` | Stage-2 tests: fail-closed and window arithmetic | 194 |
+| `tests/hostile_data.py` | Data used by the hostile-review tests | 21 |
+| `corpus/benign/` | Benign files that must PASS | none: directory |
+| `corpus_v2/` | Benign controls for the canonicalization step | none: directory |
+| `red/RED-run.txt` | Run made before the scanner existed | 116 |
+
+Data flow:
+
+1. `evaluate.py` feeds each case in `cases.jsonl` to `scanner.py` and checks the verdict and the rule against the label.
+2. `evaluate.py` scans every file in `corpus/benign` and requires PASS.
+3. It prints the tables and the summary line, which is the last line.
+4. `mutants.py` edits copies of `scanner.py` and requires the matching test file to go red.
+
+## Test and mutation evidence
+
+Measured on 2026-10-25 on macOS by running both oracles from the repo root. Each exited with code zero (rc=0). Last line of `python3 evaluate.py`:
+
+```text
+attacks caught 49/49, benign passed 16/16
+```
+
+The last table row that `python3 evaluate.py` printed, before the summary line:
+
+```text
+| files with no attack | 16/16 |
+```
+
+Last line of `python3 mutants.py`:
+
+```text
+mutants killed 26/26
+```
+
+## Change log
+
+| Date | Change | Oracle after |
+|---|---|---|
+| 2026-10-25 | Additive restructuring to the README standard: sections added, no old line altered | `python3 evaluate.py` last line `attacks caught 49/49, benign passed 16/16`; `python3 mutants.py` last line `mutants killed 26/26` |
+| 2026-10-04 | First commits (date from the repo git log) | none: no oracle output was recorded for those commits |
 
 ## License
 

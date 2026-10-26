@@ -3,6 +3,7 @@ import pathlib
 import tempfile
 
 import scanner
+import sys
 
 HERE = pathlib.Path(__file__).parent
 ORDER = ["invisible-unicode", "instruction-override", "exfil-beacon", "homoglyph", "encoded-payload", "fail-closed"]
@@ -51,4 +52,7 @@ def results():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        print("evaluate: unexpected argument: " + sys.argv[1], file=sys.stderr)
+        sys.exit(2)
     print(results())
