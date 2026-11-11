@@ -52,7 +52,8 @@ def pytest_rc(tree, test):
 
 def fresh(tmp, name):
     dst = pathlib.Path(tmp) / name
-    shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"))
+    # symlinks=True keeps the onnx/ links as links. Without it each of the 30 scratch trees held a full copy of the model weights.
+    shutil.copytree(ROOT, dst, symlinks=True, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"))
     return dst
 
 
